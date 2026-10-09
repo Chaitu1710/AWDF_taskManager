@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Manager - Express + MongoDB + Cache Demo</title>
+  <meta name="description" content="Visual demonstration of in-memory caching with Node.js, Express, node-cache, and MongoDB." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Top Navigation / Header -->
+  <header class="navbar">
+    <div class="navbar-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Task Manager</h1>
+          <p class="subtitle">Express + MongoDB + Cache Demo</p>
+        </div>
+      </div>
+
+      <div class="header-status-controls">
+        <div class="server-badge" id="serverStatusBadge">
+          <span class="status-dot pulse"></span>
+          <span class="status-label">Backend: <strong id="serverUrlLabel">http://localhost:5000</strong></span>
+        </div>
+        <button id="headerClearCacheBtn" class="btn btn-danger-outline" title="Call DELETE /cache">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          Clear Cache
+        </button>
+        <button id="headerRefreshTasksBtn" class="btn btn-primary" title="Call GET /tasks">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Refresh Tasks
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- Main Content Layout -->
+  <main class="main-container">
+    <div class="dashboard-grid">
+      
+      <!-- LEFT COLUMN: Cache Lab & Diagnostics -->
+      <aside class="dashboard-sidebar">
+        
+        <!-- SECTION 4: Prominent Cache Status Panel -->
+        <section class="card cache-hero-card" id="cacheStatusPanel">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge">LIVE MONITOR</span>
+              <h2 class="card-title">Cache Status</h2>
+            </div>
+            <span class="cache-badge" id="cacheHeroBadge">IDLE</span>
+          </div>
+
+          <div class="cache-indicator-display">
+            <div class="cache-main-status">
+              <div class="status-indicator-icon" id="cacheStatusIcon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </div>
+              <div class="status-indicator-text">
+                <span class="status-caption">CACHE STATUS</span>
+                <span class="status-value" id="cacheStatusText">READY</span>
+              </div>
+            </div>
+
+            <div class="cache-source-banner" id="cacheSourceBanner">
+              <span class="source-label">Source:</span>
+              <span class="source-value" id="cacheSourceText">Awaiting Request...</span>
+            </div>
+          </div>
+
+          <div class="cache-meta-details">
+            <div class="meta-item">
+              <span class="meta-label">Endpoint:</span>
+              <code class="meta-code" id="cacheLastEndpoint">None</code>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Cache Key:</span>
+              <code class="meta-code" id="cacheLastKey">--</code>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Response Time:</span>
+              <span class="meta-latency" id="cacheLatency">-- ms</span>
+            </div>
+          </div>
+
+          <!-- Section 6: Cache Controls -->
+          <div class="cache-action-row">
+            <button id="clearCacheBtn" class="btn btn-danger-outline btn-block">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Clear Cache (DELETE /cache)
+            </button>
+            <button id="demoRefreshBtn" class="btn btn-secondary btn-block">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Refresh Tasks (GET /tasks)
+            </button>
+          </div>
+          <div class="cache-quick-note" id="cacheDemoHint">
+            💡 <strong>Demo tip:</strong> Click "Clear Cache" first, then click "Refresh Tasks" once to see a <strong>CACHE MISS</strong> (from MongoDB). Click "Refresh Tasks" again to see a <strong>CACHE HIT</strong> (from NodeCache)!
+          </div>
+        </section>
+
+        <!-- SECTION 9: Cache Statistics Section -->
+        <section class="card stats-card">
+          <div class="card-header">
+            <h3 class="card-title">Cache Statistics</h3>
+            <button id="resetStatsBtn" class="btn-text" title="Reset all counters">
+              Reset Statistics
+            </button>
+          </div>
+          
+          <div class="stats-grid">
+            <div class="stat-box stat-hits">
+              <span class="stat-number" id="statHits">0</span>
+              <span class="stat-name">Cache Hits</span>
+            </div>
+            <div class="stat-box stat-misses">
+              <span class="stat-number" id="statMisses">0</span>
+              <span class="stat-name">Cache Misses</span>
+            </div>
+            <div class="stat-box stat-total">
+              <span class="stat-number" id="statTotal">0</span>
+              <span class="stat-name">Total Requests</span>
+            </div>
+            <div class="stat-box stat-rate">
+              <span class="stat-number" id="statHitRate">0%</span>
+              <span class="stat-name">Hit Rate</span>
+            </div>
+          </div>
+
+          <!-- Hit Rate Visual Bar -->
+          <div class="hit-rate-bar-container">
+            <div class="hit-rate-label-row">
+              <span>Hit Efficiency</span>
+              <span id="statBarLabel">0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="hitRateFill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 5: Visual Flow Diagram -->
+        <section class="card flow-card">
+          <div class="card-header">
+            <h3 class="card-title">Request Execution Flow</h3>
+            <span class="flow-pill" id="flowStatusPill">Standard Flow</span>
+          </div>
+          
+          <div class="visual-flow-wrapper">
+            <div class="flow-node node-client">
+              <div class="node-icon">💻</div>
+              <div class="node-content">
+                <strong>Frontend</strong>
+                <small>Browser Client</small>
+              </div>
+            </div>
+            
+            <div class="flow-arrow">
+              <span class="arrow-line"></span>
+              <span class="arrow-head">▼</span>
+            </div>
+
+            <div class="flow-node node-server">
+              <div class="node-icon">⚡</div>
+              <div class="node-content">
+                <strong>Express API</strong>
+                <small>Route Handler</small>
+              </div>
+            </div>
+
+            <div class="flow-arrow">
+              <span class="arrow-line"></span>
+              <span class="arrow-head">▼</span>
+            </div>
+
+            <div class="flow-decision" id="flowDecisionNode">
+              <div class="decision-box">
+                <span class="decision-icon">🔍</span>
+                <span>Cache exists?</span>
+                <small class="decision-sub">cache.get(key)</small>
+              </div>
+            </div>
+
+            <!-- Two Branches: YES (Cache Hit) vs NO (Cache Miss) -->
+            <div class="flow-branches">
+              <!-- YES Branch -->
+              <div class="branch branch-yes" id="branchYes">
+                <div class="branch-connector">
+                  <span class="branch-tag">YES (Hit)</span>
+                  <span class="branch-arrow">▼</span>
+                </div>
+                <div class="flow-node node-cache">
+                  <div class="node-icon">🟢</div>
+                  <div class="node-content">
+                    <strong>Return Cache</strong>
+                    <small>node-cache (RAM)</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- NO Branch -->
+              <div class="branch branch-no" id="branchNo">
+                <div class="branch-connector">
+                  <span class="branch-tag">NO (Miss)</span>
+                  <span class="branch-arrow">▼</span>
+                </div>
+                <div class="flow-node node-mongo">
+                  <div class="node-icon">🍃</div>
+                  <div class="node-content">
+                    <strong>MongoDB</strong>
+                    <small>Database Query</small>
+                  </div>
+                </div>
+                <div class="sub-arrow">▼</div>
+                <div class="flow-node node-store">
+                  <div class="node-content">
+                    <small>cache.set(key, data)</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Final Response node -->
+            <div class="flow-merge-connector">
+              <span class="merge-arrow">▼</span>
+            </div>
+            <div class="flow-node node-response">
+              <div class="node-icon">📦</div>
+              <div class="node-content">
+                <strong>HTTP Response</strong>
+                <small>{ source, data }</small>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 10: How Caching Works Explanation -->
+        <section class="card info-card">
+          <div class="card-header">
+            <h3 class="card-title">How Caching Works</h3>
+          </div>
+          <div class="info-content">
+            <p class="info-intro">When a task is requested, the server first checks the cache:</p>
+            
+            <div class="concept-item concept-hit">
+              <div class="concept-bullet">✓</div>
+              <div class="concept-body">
+                <strong>If the task exists in the cache:</strong>
+                <ul>
+                  <li><span class="badge-inline badge-hit">CACHE HIT</span></li>
+                  <li>Return cached data from in-memory RAM</li>
+                  <li>MongoDB is <strong>not</strong> queried (ultra-fast)</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="concept-item concept-miss">
+              <div class="concept-bullet">✕</div>
+              <div class="concept-body">
+                <strong>If the task is not in the cache:</strong>
+                <ul>
+                  <li><span class="badge-inline badge-miss">CACHE MISS</span></li>
+                  <li>Query MongoDB collection</li>
+                  <li>Store the result in cache with 60s TTL</li>
+                  <li>Return the fresh data</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="concept-item concept-invalidation">
+              <div class="concept-bullet">🔄</div>
+              <div class="concept-body">
+                <strong>Cache Invalidation:</strong>
+                <p>When a task is created, updated, or deleted, the related cache entries (<code>all_tasks</code> and <code>task_&lt;id&gt;</code>) are invalidated so clients never receive stale data.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </aside>
+
+      <!-- RIGHT COLUMN: Task Manager Operations -->
+      <section class="dashboard-main">
+        
+        <!-- SECTION 2: Create Task Form -->
+        <section class="card form-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge">NEW RECORD</span>
+              <h2 class="card-title">Create Task</h2>
+            </div>
+          </div>
+
+          <form id="createTaskForm" class="task-form">
+            <div class="form-group">
+              <label for="taskTitle" class="form-label">
+                Task Title <span class="required-star">*</span>
+              </label>
+              <input 
+                type="text" 
+                id="taskTitle" 
+                name="title" 
+                class="form-control" 
+                placeholder="e.g. Study caching strategies for practical viva" 
+                required 
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="taskDescription" class="form-label">
+                Description
+              </label>
+              <textarea 
+                id="taskDescription" 
+                name="description" 
+                class="form-control" 
+                rows="2" 
+                placeholder="Add optional task details, notes, or assignment criteria..."
+              ></textarea>
+            </div>
+
+            <div class="form-row-footer">
+              <label class="checkbox-container">
+                <input type="checkbox" id="taskCompleted" name="completed" />
+                <span class="checkmark"></span>
+                <span class="checkbox-label">Mark as Completed immediately</span>
+              </label>
+
+              <button type="submit" id="addTaskBtn" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Task
+              </button>
+            </div>
+            
+            <p class="form-helper-note">
+              ℹ️ Submitting a new task sends <code>POST /tasks</code> and automatically invalidates the <code>all_tasks</code> cache.
+            </p>
+          </form>
+        </section>
+
+        <!-- SECTION 3: Task List Section -->
+        <section class="card list-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge">COLLECTION</span>
+              <h2 class="card-title">
+                Tasks
+                <span class="counter-badge" id="tasksCountBadge">0</span>
+              </h2>
+            </div>
+            <div class="list-header-actions">
+              <button id="refreshTasksBtn" class="btn btn-secondary btn-sm" title="Fetch fresh task list">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                Refresh Tasks
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading Indicator -->
+          <div id="tasksLoading" class="tasks-loading hidden">
+            <div class="spinner"></div>
+            <span>Fetching tasks from API...</span>
+          </div>
+
+          <!-- Empty State -->
+          <div id="tasksEmpty" class="tasks-empty hidden">
+            <div class="empty-icon">📝</div>
+            <h3>No Tasks Found</h3>
+            <p>Get started by creating your first task using the form above.</p>
+          </div>
+
+          <!-- Task Card Grid / Container -->
+          <div id="tasksContainer" class="tasks-container">
+            <!-- Dynamically populated task cards -->
+          </div>
+        </section>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- SECTION 8: Single Task Cache Demonstration Modal -->
+  <div id="taskModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalTaskTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-area">
+          <span class="modal-pretitle">SINGLE TASK CACHE INSPECTOR</span>
+          <h3 id="modalTaskTitle" class="modal-title">Task Details</h3>
+        </div>
+        <button id="closeModalBtn" class="modal-close-btn" aria-label="Close modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Single Task Cache Demonstration Banner -->
+        <div class="single-cache-banner" id="modalCacheBanner">
+          <div class="banner-top">
+            <span class="banner-tag" id="modalCacheSourceTag">SOURCE: --</span>
+            <span class="banner-latency" id="modalCacheLatency">-- ms</span>
+          </div>
+          <div class="banner-main">
+            <div class="banner-status-title" id="modalCacheStatusTitle">CACHE STATUS</div>
+            <p class="banner-description" id="modalCacheDescription">Awaiting task inspection...</p>
+          </div>
+          <div class="banner-meta">
+            <span>Cache Key: <code id="modalCacheKey">task_id</code></span>
+            <span>Endpoint: <code>GET /tasks/:id</code></span>
+          </div>
+        </div>
+
+        <!-- Task Content Details -->
+        <div class="task-detail-content">
+          <div class="detail-row">
+            <span class="detail-label">Status:</span>
+            <span id="modalTaskStatus" class="status-pill">Pending</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Description:</span>
+            <p id="modalTaskDesc" class="detail-desc">No description</p>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">MongoDB ID:</span>
+            <code id="modalTaskId" class="detail-id">--</code>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Created At:</span>
+            <span id="modalTaskCreated" class="detail-timestamp">--</span>
+          </div>
+        </div>
+
+        <!-- Educational Step Walkthrough for Practical Demo -->
+        <div class="modal-edu-box">
+          <h4>🧪 Single-Task Cache Testing Flow:</h4>
+          <ol>
+            <li><strong>First click:</strong> MongoDB queried &rarr; <span class="badge-inline badge-miss">CACHE MISS</span></li>
+            <li><strong>Click "Fetch Again":</strong> Served from RAM &rarr; <span class="badge-inline badge-hit">CACHE HIT</span></li>
+            <li><strong>Click "Toggle Completed":</strong> Updates task &amp; invalidates <code>task_&lt;id&gt;</code></li>
+            <li><strong>Click "Fetch Again":</strong> Cache was invalidated &rarr; <span class="badge-inline badge-miss">CACHE MISS</span> again!</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="modalRefetchBtn" class="btn btn-secondary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Fetch Again (GET /tasks/:id)
+        </button>
+        <button id="modalToggleBtn" class="btn btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Toggle Completed (PUT)
+        </button>
+        <button id="modalCloseActionBtn" class="btn btn-outline">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
